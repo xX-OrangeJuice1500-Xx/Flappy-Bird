@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Flappy Bird 3D Evolved</title>
+    <style>
+        :root {
+            --primary: #ff9f43;
+            --secondary: #ff6b6b;
+            --dark: #2c3e50;
+            --light: #f5f6fa;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body {
+            background: linear-gradient(135deg, #1e272e, #0a3d62);
+            color: var(--light);
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        #game-container {
+            position: relative;
+            width: 480px;
+            height: 640px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            border-radius: 16px;
+            overflow: hidden;
+            border: 4px solid rgba(255, 255, 255, 0.1);
+        }
+
+        canvas {
+            display: block;
+            background: #000;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* UI Overlay Screen Style */
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(10, 25, 47, 0.85);
+            backdrop-filter: blur(8px);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            z-index: 10;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .hidden {
+            opacity: 0;
+            pointer-events: none;
+            transform: scale(0.95);
+        }
+
+        h1 {
+            font-size: 3rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #fff200, #ff85a2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        p {
+            color: #a4b0be;
+            font-size: 1.1rem;
+            margin-bottom: 30px;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border: none;
+            color: white;
+            padding: 14px 36px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 8px 20px rgba(255, 107, 107, 0.4);
+            transition: transform 0.1s, box-shadow 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            outline: none;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 24px rgba(255, 107, 107, 0.6);
+        }
+
+        .btn:active {
+            transform: translateY(1px);
+        }
+
+        /* Score Tracker styling during gameplay */
+        #score-hud {
+            position: absolute;
+            top: 25px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 3.5rem;
+            font-weight: 900;
+            color: #fff;
+            text-shadow: 0 4px 8px rgba(0,0,0,0.4), 0 0 20px rgba(255,255,255,0.2);
+            z-index: 5;
+            pointer-events: none;
+            font-family: monospace;
+        }
+
+        .stats-box {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            min-width: 220px;
+        }
+
+        .stat-line {
+            display: flex;
+            justify-content: space-between;
+            margin: 8px 0;
+            font-size: 1.2rem;
+        }
+
+        .stat-val {
+            font-weight: bold;
+            color: #fff;
+        }
+
+        /* Mobile Controls Instructions Helper */
+        .controls-hint {
+            margin-top: 40px;
+            font-size: 0.85rem;
+            color: #747d8c;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div id="score-hud">0</div>
+
+        <div id="start-screen" class="screen">
+            <h1>Flappy 3D</h1>
+            <p>A pseudo-3D arcade experience</p>
+            <button class="btn" id="start-btn">Launch Game</button>
+            <div class="controls-hint">PRESS SPACEBAR OR TAP TO FLAP</div>
+        </div>
+
+        <div id="gameover-screen" class="screen hidden">
+            <h1>Game Over</h1>
+            <div class="stats-box">
+                <div class="stat-line">
+                    <span>Score:</span>
+                    <span id="final-score" class="stat-val">0</span>
+                </div>
+                <div class="stat-line">
+                    <span>Best Run:</span>
+                    <span id="high-score" class="stat-val">0</span>
+                </div>
+            </div>
+            <button class="btn" id="restart-btn">Fly Again</button>
+        </div>
+
+        <canvas id="gameCanvas" width="480" height="640"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreHud = document.getElementById('score-hud');
+        const startScreen = document.getElementById('start-screen');
+        const gameoverScreen = document.getElementById('gameover-screen');
+        const startBtn = document.getElementById('start-btn');
+        const restartBtn = document.getElementById('restart-btn');
+        const finalScoreLabel = document.getElementById('final-score');
+        const highScoreLabel = document.getElementById('high-score');
+
+        // Global Engine State Variables
+        let gameState = 'START'; // START, PLAYING, GAMEOVER
+        let score = 0;
+        let highScore = localStorage.getItem('flappy3d_highscore') || 0;
+        let animationFrameId;
+
+        // Physics Properties
+        const GRAVITY = 0.35;
+        const FLAP_STRENGTH = -6.8;
+        const MAX_FALL_SPEED = 10;
+        const PIPE_SPEED = 3;
+        const PIPE_SPAWN_RATE = 110; // Frames between pipe spawns
+        const PIPE_GAP = 160;
+
+        // Entities container arrays
+        let bird;
+        let pipes = [];
+        let particles = [];
+        let stars = []; // Background depth Layer 1
+        let distantClouds = []; // Background depth Layer 2
+        let frameCount = 0;
+
+        // --- ENVIRONMENT OBJECT INITIALIZERS ---
+        function initBackground() {
+            stars = [];
+            distantClouds = [];
+            for (let i = 0; i < 40; i++) {
+                stars.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * (canvas.height - 150),
+                    size: Math.random() * 2 + 1,
+                    speed: Math.random() * 0.2 + 0.05
+                });
+            }
+            for (let i = 0; i < 3; i++) {
+                distantClouds.push({
+                    x: i * 200 + Math.random() * 50,
+                    y: 50 + Math.random() * 80,
+                    width: 120 + Math.random() * 60,
+                    height: 40 + Math.random() * 20,
+                    speed: 0.3
+                });
+            }
+        }
+
+        // --- GAME OBJECT CONSTRUCTORS ---
+        class Pseudo3DBird {
+            constructor() {
+                this.x = 120;
+                this.y = 250;
+                this.radius = 16;
+                this.velocity = 0;
+                this.tilt = 0;
+                this.wingPhase = 0;
+            }
+
+            flap() {
+                this.velocity = FLAP_STRENGTH;
+                // Create elegant engine exhaust/wind particles when flapping
+                for (let i = 0; i < 8; i++) {
+                    particles.push(new Particle(this.x - 5, this.y, 'rgba(255, 255, 255, 0.6)'));
+                }
+            }
+
+            update() {
+                this.velocity += GRAVITY;
+                if (this.velocity > MAX_FALL_SPEED) this.velocity = MAX_FALL_SPEED;
+                this.y += this.velocity;
+
+                // Handle angular calculations based on velocity Vector
+                this.tilt = Math.min(Math.max(this.velocity * 0.07, -0.6), 0.8);
+                this.wingPhase += 0.2 + Math.abs(this.velocity * 0.05);
+
+                // Floor / Ceiling constraints boundaries
+                if (this.y + this.radius >= canvas.height - 40) {
+                    this.y = canvas.height - 40 - this.radius;
+                    return true; // Triggers collision crash
+                }
+                if (this.y - this.radius <= 0) {
+                    this.y = this.radius;
+                    this.velocity = 0.5;
+                }
+                return false;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.tilt);
+
+                // Establish Global Pseudo 3D Shadow Displacement Direction
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+                ctx.shadowBlur = 12;
+                ctx.shadowOffsetX = 10;
+                ctx.shadowOffsetY = 12;
+
+                // --- 3D Layered Sphere Construction (Spherical Shading) ---
+                let gradient = ctx.createRadialGradient(-4, -4, 2, 0, 0, this.radius);
+                gradient.addColorStop(0, '#fff200');
+                gradient.addColorStop(0.4, '#ff9f43');
+                gradient.addColorStop(1, '#ee5253');
+
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Render dynamic extruded Wing (Depth Transformation)
+                ctx.shadowColor = 'transparent';
+                ctx.fillStyle = '#ff6b6b';
+                let wingAmplitude = Math.sin(this.wingPhase) * 12;
+                
+                ctx.beginPath();
+                ctx.ellipse(-8, 2, 6, Math.abs(wingAmplitude) + 2, Math.PI/4, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+
+                // Eyes with explicit directional lookup focus matrix
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(8, -5, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#000000';
+                ctx.beginPath();
+                ctx.arc(10, -5, 3, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Beak Layer with geometric extrusion
+                let beakGrad = ctx.createLinearGradient(10, -2, 22, 4);
+                beakGrad.addColorStop(0, '#ff9f43');
+                beakGrad.addColorStop(1, '#ff5252');
+                ctx.fillStyle = beakGrad;
+                ctx.beginPath();
+                ctx.moveTo(12, -6);
+                ctx.lineTo(24, 0);
+                ctx.lineTo(12, 5);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.restore();
+            }
+        }
+
+        class Pseudo3DPipe {
+            constructor(x) {
+                this.x = x;
+                // Randomized systemic generation logic for passage window heights
+                this.topLength = Math.floor(Math.random() * (canvas.height - PIPE_GAP - 160)) + 60;
+                this.bottomY = this.topLength + PIPE_GAP;
+                this.bottomLength = canvas.height - this.bottomY - 40;
+                this.width = 76;
+                this.passed = false;
+                this.depthOffset = 14; // The 3D side-extrusion size indicator
+            }
+
+            update() {
+                this.x -= PIPE_SPEED;
+            }
+
+            draw() {
+                // Render Top Column Element and Bottom Column Element respectively
+                this.drawStructure(this.x, 0, this.width, this.topLength, true);
+                this.drawStructure(this.x, this.bottomY, this.width, this.bottomLength, false);
+            }
+
+            drawStructure(x, y, w, h, isTop) {
+                ctx.save();
+                
+                // Absolute shadow layers 
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.25)';
+                ctx.shadowBlur = 15;
+                ctx.shadowOffsetX = 12;
+                ctx.shadowOffsetY = 0;
+
+                // 1. FRONT FACE (The Main Pillar Wall)
+                let frontGrad = ctx.createLinearGradient(x, 0, x + w, 0);
+                frontGrad.addColorStop(0, '#1dd1a1');
+                frontGrad.addColorStop(0.3, '#10ac84');
+                frontGrad.addColorStop(0.8, '#0b8a69');
+                frontGrad.addColorStop(1, '#06523f');
+                
+                ctx.fillStyle = frontGrad;
+                ctx.fillRect(x, y, w, h);
+
+                // 2. SIDE EXTRUSION FACE (Provides the spatial 3D Depths perception)
+                ctx.shadowColor = 'transparent';
+                let sideGrad = ctx.createLinearGradient(x + w, 0, x + w + this.depthOffset, 0);
+                sideGrad.addColorStop(0, '#06523f');
+                sideGrad.addColorStop(1, '#02261d');
+                ctx.fillStyle = sideGrad;
+                
+                ctx.beginPath();
+                ctx.moveTo(x + w, y);
+                ctx.lineTo(x + w + this.depthOffset, y - this.depthOffset);
+                ctx.lineTo(x + w + this.depthOffset, y + h - this.depthOffset);
+                ctx.lineTo(x + w, y + h);
+                ctx.closePath();
+                ctx.fill();
+
+                // 3. TOP/BOTTOM OVERLAY LIP CAPS RENDERERS
+                const lipHeight = 32;
+                let lipY = isTop ? (y + h - lipHeight) : y;
+                let lipXOffset = 4;
+                let capW = w + (lipXOffset * 2);
+                let capX = x - lipXOffset;
+
+                // Front Cap Lip Face
+                let capGrad = ctx.createLinearGradient(capX, 0, capX + capW, 0);
+                capGrad.addColorStop(0, '#1dd1a1');
+                capGrad.addColorStop(0.2, '#10ac84');
+                capGrad.addColorStop(0.9, '#054737');
+                
+                ctx.fillStyle = capGrad;
+                ctx.fillRect(capX, lipY, capW, lipHeight);
+                ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(capX, lipY, capW, lipHeight);
+
+                // Side Cap Lip Extrusion Specular
+                ctx.fillStyle = '#02261d';
+                ctx.beginPath();
+                ctx.moveTo(capX + capW, lipY);
+                ctx.lineTo(capX + capW + this.depthOffset, lipY - this.depthOffset);
+                ctx.lineTo(capX + capW + this.depthOffset, lipY + lipHeight - this.depthOffset);
+                ctx.lineTo(capX + capW, lipY + lipHeight);
+                ctx.closePath();
+                ctx.fill();
+
+                // Highlight Top Cap Ring Beveling Edge if viewing open rim structure
+                if (isTop) {
+                    ctx.fillStyle = '#10ac84';
+                    ctx.beginPath();
+                    ctx.moveTo(capX, lipY);
+                    ctx.lineTo(capX + this.depthOffset, lipY - this.depthOffset);
+                    ctx.lineTo(capX + capW + this.depthOffset, lipY - this.depthOffset);
+                    ctx.lineTo(capX + capW, lipY);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+
+                ctx.restore();
+            }
+
+            collidesWith(birdObj) {
+                // Check basic boundaries intersections inside projection matrix bounding boxes
+                let insideX = birdObj.x + birdObj.radius > this.x && birdObj.x - birdObj.radius < this.x + this.width;
+                if (insideX) {
+                    let hitTop = birdObj.y - birdObj.radius < this.topLength;
+                    let hitBottom = birdObj.y + birdObj.radius > this.bottomY;
+                    if (hitTop || hitBottom) return true;
+                }
+                return false;
+            }
+        }
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.size = Math.random() * 5 + 2;
+                this.speedX = -Math.random() * 4 - 2;
+                this.speedY = (Math.random() - 0.5) * 3;
+                this.color = color;
+                this.alpha = 1;
+                this.decay = Math.random() * 0.03 + 0.02;
+            }
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+                this.alpha -= this.decay;
+            }
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.alpha;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // --- ENGINE CONTROLLER SYSTEM OPERATIONS ---
+        function initNewGame() {
+            score = 0;
+            frameCount = 0;
+            scoreHud.innerText = score;
+            bird = new Pseudo3DBird();
+            pipes = [];
+            particles = [];
+            initBackground();
+        }
+
+        function drawEnvironment() {
+            // Background Sky Master Gradient Base Setup
+            let skyGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            skyGrad.addColorStop(0, '#0f172a');
+            skyGrad.addColorStop(0.5, '#1e293b');
+            skyGrad.addColorStop(1, '#334155');
+            ctx.fillStyle = skyGrad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Dynamic distant starry parallax elements update/render
+            ctx.fillStyle = '#ffffff';
+            stars.forEach(star => {
+                if (gameState === 'PLAYING') star.x -= star.speed;
+                if (star.x < 0) star.x = canvas.width;
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.size, 0, Math.PI*2);
+                ctx.fill();
+            });
+
+            // Parallax Distant Clouds Vector Drawing
+            ctx.fillStyle = 'rgba(255,255,255,0.04)';
+            distantClouds.forEach(cloud => {
+                if (gameState === 'PLAYING') cloud.x -= cloud.speed;
+                if (cloud.x + cloud.width < 0) cloud.x = canvas.width + 50;
+                
+                ctx.beginPath();
+                ctx.roundRect(cloud.x, cloud.y, cloud.width, cloud.height, 20);
+                ctx.fill();
+            });
+
+            // Isometric Ground Mesh Matrix Layer
+            const groundHeight = 40;
+            let groundY = canvas.height - groundHeight;
+            
+            let groundGrad = ctx.createLinearGradient(0, groundY, 0, canvas.height);
+            groundGrad.addColorStop(0, '#0f766e');
+            groundGrad.addColorStop(1, '#115e59');
+            ctx.fillStyle = groundGrad;
+            ctx.fillRect(0, groundY, canvas.width, groundHeight);
+
+            // Horizon accent trim line
+            ctx.fillStyle = '#14b8a6';
+            ctx.fillRect(0, groundY, canvas.width, 3);
+        }
+
+        function triggerGameOver() {
+            gameState = 'GAMEOVER';
+            cancelAnimationFrame(animationFrameId);
+
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('flappy3d_highscore', highScore);
+            }
+
+            finalScoreLabel.innerText = score;
+            highScoreLabel.innerText = highScore;
+            
+            // Screen Visibility Toggles Animations Trigger
+            gameoverScreen.classList.remove('hidden');
+            scoreHud.style.opacity = '0';
+        }
+
+        function gameLoop() {
+            frameCount++;
+            // Clear entire dynamic frame state buffer canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Background Drawing Process
+            drawEnvironment();
+
+            // Pipes Pipeline Processing
+            if (gameState === 'PLAYING' && frameCount % PIPE_SPAWN_RATE === 0) {
+                pipes.push(new Pseudo3DPipe(canvas.width + 20));
+            }
+
+            for (let i = pipes.length - 1; i >= 0; i--) {
+                if (gameState === 'PLAYING') pipes[i].update();
+                pipes[i].draw();
+
+                // Scoring Collision Checking
+                if (!pipes[i].passed && pipes[i].x + pipes[i].width < bird.x) {
+                    score++;
+                    scoreHud.innerText = score;
+                    pipes[i].passed = true;
+                    
+                    // Trigger Score burst effect elements particles
+                    for(let p=0; p<10; p++) {
+                        particles.push(new Particle(bird.x, bird.y, '#fff200'));
+                    }
+                }
+
+                if (pipes[i].collidesWith(bird)) {
+                    triggerGameOver();
+                }
+
+                // Cleanup cycle memory routine optimization
+                if (pipes[i].x + pipes[i].width + 20 < 0) {
+                    pipes.splice(i, 1);
+                }
+            }
+
+            // Particle Pipeline Management
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                particles[i].draw();
+                if (particles[i].alpha <= 0) particles.splice(i, 1);
+            }
+
+            // Bird Lifecycle Operations
+            if (gameState === 'PLAYING') {
+                let hitFloor = bird.update();
+                if (hitFloor) triggerGameOver();
+            }
+            bird.draw();
+
+            if (gameState === 'PLAYING') {
+                animationFrameId = requestAnimationFrame(gameLoop);
+            }
+        }
+
+        function handleInput(e) {
+            // Prevent scrolling space defaults
+            if (e.code === 'Space') e.preventDefault();
+            
+            if (gameState === 'PLAYING') {
+                bird.flap();
+            } else if (gameState === 'START') {
+                startGameAction();
+            }
+        }
+
+        function startGameAction() {
+            startScreen.classList.add('hidden');
+            scoreHud.style.opacity = '1';
+            gameState = 'PLAYING';
+            initNewGame();
+            gameLoop();
+        }
+
+        function restartGameAction() {
+            gameoverScreen.classList.add('hidden');
+            scoreHud.style.opacity = '1';
+            gameState = 'PLAYING';
+            initNewGame();
+            gameLoop();
+        }
+
+        // --- WINDOW EVENTS REGISTRATION ---
+        window.addEventListener('keydown', handleInput);
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault(); // Disables zoom and synthetic click delay actions
+            if (gameState === 'PLAYING') bird.flap();
+        }, { passive: false });
+
+        startBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            startGameAction();
+        });
+        
+        restartBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            restartGameAction();
+        });
+
+        // Initialize static setup display for Menu Background Screen
+        initNewGame();
+        drawEnvironment();
+        bird.draw();
+    </script>
+</body>
+</html>
